@@ -4,13 +4,16 @@ from django.http import HttpResponse
 from rest_framework.decorators import api_view, parser_classes, permission_classes
 from django.views.decorators.csrf import csrf_exempt
 
-from .models import ShopKeeper, Shop, Notification
+from .models import ShopKeeper, Shop, Notification, Product
 
 import pyrebase
 import firebase_admin
 from firebase_admin import credentials, auth
 import os, json
 from django.http import JsonResponse
+from rest_framework.response import Response
+from rest_framework import status
+from .serializers import NotificationSerializer
 
 
 firebaseConfig = {
@@ -200,3 +203,54 @@ def request_password_reset(request):
     except Exception as e:
         return JsonResponse({"message": "Error sending reset email", "error": str(e)}, status=400)
 # end
+
+# start of get notifications api
+@api_view(['GET'])
+def get_notifications(request, shopkeeper_id):
+    try:
+        shopkeeper = ShopKeeper.objects.get(id=shopkeeper_id)
+        notifications = Notification.objects.filter(shopkeeper=shopkeeper, is_read=False).order_by('-created_at')
+        serializer = NotificationSerializer(notifications, many=True)
+
+        return Response(serializer.data)
+    except ShopKeeper.DoesNotExist:
+        return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+# end of notification api
+
+
+# add product api
+@api_view(['POST'])
+def add_product(request):
+    if request.method == 'POST':
+        try:
+            shop_id = request.data.get("shop_id")
+            product_name = request.data.get("product_name")
+            barcode_number = request.data.get("barcode_number")
+            price = request.data.get("price")
+            quantity = request.data.get("quantity")
+            print("Received data:", shop_id, product_name, barcode_number, price, quantity)
+
+            if not all([shop_id, product_name, barcode_number, price, quantity]):
+                return JsonResponse({"message": "All fields are required"}, status=400)
+            
+            # check shop exists
+            shop = Shop.objects.get(id=shop_id)
+            if not shop:
+                return JsonResponse({"message": "Shop not found"}, status=404)
+
+            product = Product.objects.create(
+                shop=shop,
+                product_name=product_name,
+                barcode_number=barcode_number,
+                price=price,
+                quantity=quantity,
+            )
+    
+            return JsonResponse({"message": "Product added successfully", "product_id": product.id}, status=201)
+
+        except Exception as e:
+            print("Error:", str(e))
+            return JsonResponse({"message": "An error occurred", "error": str(e)}, status=500)
+
+# end of add product api
