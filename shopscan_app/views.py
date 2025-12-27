@@ -254,3 +254,55 @@ def add_product(request):
             return JsonResponse({"message": "An error occurred", "error": str(e)}, status=500)
 
 # end of add product api
+
+# api to get product for a shop
+@api_view(['GET'])
+def get_products(request, shop_id):
+    try:
+        products = Product.objects.filter(shop_id=shop_id)
+        product_list = []
+        for product in products:
+            product_list.append({
+                'id': product.id,
+                'product_name': product.product_name,
+                'price': str(product.price),
+                'quantity': product.quantity,
+                'barcode_number': product.barcode_number,
+                'date_added': product.date_added.strftime("%Y-%m-%d %H:%M:%S"),
+            })
+        
+
+        return JsonResponse({"products": product_list}, status=200)
+    except Exception as e:
+        print("Error:", str(e))
+        logger.info(f"Error fetching products: {str(e)}")
+        return JsonResponse({"message": "An error occurred", "error": str(e)}, status=500)
+
+# end of get products api
+
+# add stock to product api
+@csrf_exempt
+@api_view(['POST'])
+def add_stock(request):
+    try:
+        shop_id = request.data.get("shop_id")
+        product_id = request.data.get("product_id")
+        additional_stock = int(request.data.get("additional_stock"))
+        shop = Shop.objects.get(id=shop_id)
+        product = Product.objects.get(id=product_id, shop=shop)
+
+        if additional_stock < 0:
+            return JsonResponse({"message": "Stock cannot be negative"}, status=400)
+
+        product.quantity += additional_stock
+        product.save()
+
+        return JsonResponse({"message": "Stock updated successfully", "new_stock": product.quantity}, status=200)
+
+    except Product.DoesNotExist:
+        return JsonResponse({"message": "Product not found"}, status=404)
+    except Exception as e:
+        print("Error:", str(e))
+        return JsonResponse({"message": "An error occurred", "error": str(e)}, status=500)
+
+# end of add stock api

@@ -9,4 +9,6 @@ urlpatterns = [
     path('request_password_reset/', views.request_password_reset, name='request_password_reset'),
     path('get_notifications/<int:shopkeeper_id>/', views.get_notifications, name='get_notifications'),
     path('add_product/', views.add_product, name='add_product'),
+    path('get_products/<int:shop_id>/', views.get_products, name='get_products'),
+    path('add_stock/', views.add_stock, name='add_stock'),
 ]
