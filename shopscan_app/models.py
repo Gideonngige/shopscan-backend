@@ -28,7 +28,7 @@ class Shop(models.Model):
     date_joined = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
-        return f"{self.shop_name} {self.date_joined}"
+        return f"# {self.id} {self.shop_name} {self.date_joined}"
 
 # shop subscription model
 class ShopSubscription(models.Model):
@@ -68,7 +68,19 @@ class Product(models.Model):
     date_added = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
-        return f"{self.shop.shop_name} {self.product_name} {self.price} {self.quantity}"
+        return f"{self.shop.shop_name} {self.product_name} {self.barcode_number} {self.price} {self.quantity}"
+
+# product sales model
+class ProductSale(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='products')
+    shop = models.ForeignKey(Shop, on_delete=models.CASCADE, related_name='shop_sales', default=1)
+    shopkeeper = models.ForeignKey(ShopKeeper, on_delete=models.CASCADE, related_name='shopkeeper_sales', default=1)
+    quantity = models.IntegerField()
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    sold_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Sale # {self.id} for {self.shop.shop_name} Product {self.product.product_name} by {self.shopkeeper.shopkeeper_name}"
 
 # payment model
 class Payment(models.Model):

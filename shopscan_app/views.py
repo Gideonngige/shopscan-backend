@@ -4,7 +4,8 @@ from django.http import HttpResponse
 from rest_framework.decorators import api_view, parser_classes, permission_classes
 from django.views.decorators.csrf import csrf_exempt
 
-from .models import ShopKeeper, Shop, Notification, Product
+from .models import ShopKeeper, Shop, Notification, Product, ProductSale
+from rest_framework.parsers import MultiPartParser, FormParser
 
 import pyrebase
 import firebase_admin
@@ -98,6 +99,8 @@ def signin(request):
                 "shopkeeper_id": db_user.id,
                 "shopkeeper_name": db_user.shopkeeper_name,
                 "shopkeeper_email": db_user.email,
+                "shop_name": db_user.shop.shop_name,
+                "shop_id": db_user.shop.id,
                 "phone_number": db_user.phone_number,
                 "phone_verified": db_user.phone_verified,
                 "profile_image": db_user.profile_image,
@@ -287,6 +290,7 @@ def add_stock(request):
     try:
         shop_id = request.data.get("shop_id")
         product_id = request.data.get("product_id")
+        price = request.data.get("price")
         additional_stock = int(request.data.get("additional_stock"))
         shop = Shop.objects.get(id=shop_id)
         product = Product.objects.get(id=product_id, shop=shop)
@@ -295,6 +299,8 @@ def add_stock(request):
             return JsonResponse({"message": "Stock cannot be negative"}, status=400)
 
         product.quantity += additional_stock
+        if price:
+            product.price = price
         product.save()
 
         return JsonResponse({"message": "Stock updated successfully", "new_stock": product.quantity}, status=200)
@@ -306,3 +312,114 @@ def add_stock(request):
         return JsonResponse({"message": "An error occurred", "error": str(e)}, status=500)
 
 # end of add stock api
+
+# start of update shopkeeper profile api
+@csrf_exempt
+@api_view(['POST'])
+@parser_classes([MultiPartParser, FormParser])
+# @verify_firebase_token
+def update_shopkeeper_profile(request):
+    try:
+        shopkeeper_id = request.data.get('shopkeeper_id')
+        shopkeeper_name = request.data.get('shopkeeper_name')
+        shop_name = request.data.get('shop_name')
+        phone_number = request.data.get('phone_number')
+        profile_image = request.FILES.get('profile_image')
+
+        shopkeeper = ShopKeeper.objects.get(id=shopkeeper_id)
+
+        if shopkeeper_name:
+            shopkeeper.full_name = shopkeeper_name
+
+        if phone_number:
+            shopkeeper.phone_number = phone_number
+        if shop_name:
+            shopkeeper.shop.shop_name = shop_name
+            shopkeeper.shop.save()
+        if profile_image:
+            shopkeeper.profile_image = profile_image 
+
+        shopkeeper.save()
+        return JsonResponse({
+            "message": "Profile updated successfully",
+            "profile_image": shopkeeper.profile_image.url if shopkeeper.profile_image else None,
+            "name": shopkeeper.full_name,
+            "phone": shopkeeper.phone_number,
+            "email": shopkeeper.email,
+        }, status=200)
+
+    except ShopKeeper.DoesNotExist:
+        return JsonResponse({"message": "ShopKeeper not found"}, status=404)
+
+    except Exception as e:
+        print(e)
+        return JsonResponse({
+            "message": "Invalid login",
+            "error": str(e)
+        }, status=400)
+
+
+# end of update shopkeeper profile api
+
+
+# create bulky sale api
+@csrf_exempt
+@api_view(['POST'])
+def create_bulk_sale(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            shop_id = data.get("shop_id")
+            shopkeeper_id = data.get("shopkeeper_id")
+            products = data.get("products", [])  # List of items
+
+            if not shop_id or not shopkeeper_id or not products:
+                return JsonResponse({"message": "Shop ID, ShopKeeper ID and product list are required"}, status=400)
+
+            # shop check
+            shop = Shop.objects.filter(id=shop_id).first()
+            if not shop:
+                return JsonResponse({"message": "Shop not found"}, status=404)
+
+            # shopkeeper check
+            shopkeeper = ShopKeeper.objects.filter(id=shopkeeper_id, shop=shop).first()
+            if not shopkeeper:
+                return JsonResponse({"message": "ShopKeeper not found for this shop"}, status=404)
+
+            sale_ids = []
+            for item in products:
+                barcode_number = item.get("barcode_number")
+                # quantity = item.get("quantity")
+                # price = item.get("price")
+
+                # Check required fields
+                if not all([barcode_number]):
+                    return JsonResponse({"message": "Missing product details in one of the items"}, status=400)
+
+                # product check
+                product = Product.objects.filter(barcode_number=barcode_number).first()
+                if not product:
+                    return JsonResponse({"message": f"Product with barcode {barcode_number} not found"}, status=404)
+
+                if product.quantity < 1:
+                    return JsonResponse({"message": f"Not enough stock for {product.product_name}"}, status=400)
+
+                # Create sale
+                sale = ProductSale.objects.create(
+                    product=product,
+                    shop=shop,
+                    shopkeeper=shopkeeper,
+                    quantity=1,
+                    price=product.price,
+                )
+                product.quantity -= 1
+                product.save()
+                sale_ids.append(sale.id)
+
+            return JsonResponse({"message": "All sales created successfully", "sale_ids": sale_ids}, status=200)
+
+        except Exception as e:
+            print("Error:", str(e))
+            return JsonResponse({"message": "An error occurred", "error": str(e)}, status=500)
+
+# endof create sale api
