@@ -11,7 +11,7 @@ from django.utils import timezone
 from django.db.models import Sum
 from datetime import timedelta
 
-from django.db.models import F, Sum, DecimalField, ExpressionWrapper
+from django.db.models import F, Sum, Count, DecimalField, ExpressionWrapper
 from django.utils.timesince import timesince
 
 import pyrebase
@@ -517,3 +517,22 @@ def recent_sales(request, shop_id):
 
     return Response({"sales": data})
 # end of recent sales api
+
+
+# dashboard summary api
+@api_view(["GET"])
+def dashboard_summary(request, shop_id):
+    # Total products
+    total_products = Product.objects.filter(shop_id=shop_id).count()
+
+    # Total sales amount
+    total_sales = ProductSale.objects.filter(shop_id=shop_id).aggregate(
+        total=Sum("price")
+    )["total"] or 0
+
+    return JsonResponse({
+        "total_products": total_products,
+        "total_sales": float(total_sales)
+    })
+
+# end of dashboard summary api
