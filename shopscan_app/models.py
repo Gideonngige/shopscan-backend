@@ -56,7 +56,7 @@ class ShopKeeper(models.Model):
     date_joined = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
-        return f"{self.shop.shop_name} {self.shopkeeper_name} {self.date_joined}"
+        return f"#{self.id} {self.shop.shop_name} {self.shopkeeper_name} {self.date_joined}"
 
 # product model
 class Product(models.Model):
@@ -68,7 +68,7 @@ class Product(models.Model):
     date_added = models.DateTimeField(default=timezone.now)
 
     def __str__(self):
-        return f"{self.shop.shop_name} {self.product_name} {self.barcode_number} {self.price} {self.quantity}"
+        return f"#{self.id} {self.shop.shop_name} {self.product_name} {self.barcode_number} {self.price} {self.quantity}"
 
 # product sales model
 class ProductSale(models.Model):

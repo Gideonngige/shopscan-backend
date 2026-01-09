@@ -33,9 +33,9 @@ authe = firebase.auth()
 database = firebase.database()
 
 # Initialize Firebase once (e.g., in settings.py or a startup file)
-service_account_info = json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT"])
-# cred = credentials.Certificate("serviceAccountKey.json")
-cred = credentials.Certificate(service_account_info)
+# service_account_info = json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT"])
+cred = credentials.Certificate("serviceAccountKey.json")
+# cred = credentials.Certificate(service_account_info)
 # firebase_admin.initialize_app(cred)
 if not firebase_admin._apps:
     firebase_admin.initialize_app(cred)
@@ -423,3 +423,27 @@ def create_bulk_sale(request):
             return JsonResponse({"message": "An error occurred", "error": str(e)}, status=500)
 
 # endof create sale api
+
+# delete product api
+@api_view(['DELETE'])
+def delete_product(request, shopkeeper_id, product_id):
+    try:
+        # check shopkeeper exists
+        shopkeeper = ShopKeeper.objects.get(id=shopkeeper_id)
+        if not shopkeeper:
+            return JsonResponse({"message": "ShopKeeper not found"}, status=404)
+        
+        product = Product.objects.get(id=product_id, shop=shopkeeper.shop)
+        if not product:
+            return JsonResponse({"message": "Product not found"}, status=404)
+
+        product.delete()
+        return JsonResponse({"message": "Product deleted successfully"}, status=200)
+
+    except Product.DoesNotExist:
+        return JsonResponse({"message": "Product not found"}, status=404)
+
+    except Exception as e:
+        return JsonResponse({"message": "An error occurred", "error": str(e)}, status=500)
+
+# end of delete product api
