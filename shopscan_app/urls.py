@@ -17,4 +17,5 @@ urlpatterns = [
     path('shopkeeper_dashboard/<int:shopkeeper_id>/', views.shopkeeper_dashboard, name='shopkeeper_dashboard'),
     path('recent_sales/<int:shop_id>/', views.recent_sales, name='recent_sales'),
     path('dashboard_summary/<int:shop_id>/', views.dashboard_summary, name='dashboard_summary'),
+    path('weekly_sales/<int:shop_id>/', views.weekly_sales, name='weekly_sales'),
 ]

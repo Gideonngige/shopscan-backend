@@ -536,3 +536,35 @@ def dashboard_summary(request, shop_id):
     })
 
 # end of dashboard summary api
+
+
+# api for weekly sales data
+@api_view(["GET"])
+def weekly_sales(request, shop_id):
+    today = timezone.now().date()
+    start_date = today - timedelta(days=6)
+
+    sales = (
+        ProductSale.objects
+        .filter(shop_id=shop_id, sold_at__date__gte=start_date)
+        .extra(select={'day': "date(sold_at)"})
+        .values("day")
+        .annotate(total=Sum("price"))
+        .order_by("day")
+    )
+
+    # Prepare full week with zeros
+    result = {}
+    for i in range(7):
+        day = start_date + timedelta(days=i)
+        result[str(day)] = 0
+
+    for s in sales:
+        result[str(s["day"])] = float(s["total"])
+
+    return JsonResponse({
+        "labels": list(result.keys()),
+        "data": list(result.values())
+    })
+
+# end of weekly sales api
