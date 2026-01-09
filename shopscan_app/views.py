@@ -568,3 +568,22 @@ def weekly_sales(request, shop_id):
     })
 
 # end of weekly sales api
+
+# api for stock status
+@api_view(["GET"])
+def stock_status(request, shop_id):
+    products = Product.objects.filter(shop_id=shop_id)
+
+    data = []
+    for p in products:
+        data.append({
+            "id": p.id,
+            "name": p.product_name,
+            "quantity": float(p.quantity),
+            "status": "in" if p.quantity > 0 else "out"
+        })
+
+    return JsonResponse({
+        "products": data
+    })
+# end of stock status api
