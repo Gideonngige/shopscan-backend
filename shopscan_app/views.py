@@ -7,6 +7,13 @@ from django.views.decorators.csrf import csrf_exempt
 from .models import ShopKeeper, Shop, Notification, Product, ProductSale
 from rest_framework.parsers import MultiPartParser, FormParser
 
+from django.utils import timezone
+from django.db.models import Sum
+from datetime import timedelta
+
+from django.db.models import F, Sum, DecimalField, ExpressionWrapper
+from django.utils.timesince import timesince
+
 import pyrebase
 import firebase_admin
 from firebase_admin import credentials, auth
@@ -447,3 +454,66 @@ def delete_product(request, shopkeeper_id, product_id):
         return JsonResponse({"message": "An error occurred", "error": str(e)}, status=500)
 
 # end of delete product api
+
+# api for shopkeeper dashboard
+@api_view(["GET"])
+def shopkeeper_dashboard(request, shopkeeper_id):
+    today = timezone.now().date()
+    yesterday = today - timedelta(days=1)
+
+    amount_expr = ExpressionWrapper(
+        F("price") * F("quantity"),
+        output_field=DecimalField(max_digits=12, decimal_places=2)
+    )
+
+    # Today's total
+    today_sales = ProductSale.objects.filter(
+        shopkeeper_id=shopkeeper_id,
+        sold_at__date=today
+    ).annotate(
+        total=amount_expr
+    ).aggregate(sum=Sum("total"))["sum"] or 0
+
+    # Yesterday's total
+    yesterday_sales = ProductSale.objects.filter(
+        shopkeeper_id=shopkeeper_id,
+        sold_at__date=yesterday
+    ).annotate(
+        total=amount_expr
+    ).aggregate(sum=Sum("total"))["sum"] or 0
+
+    # Performance calculation
+    if yesterday_sales > 0:
+        percentage_change = ((today_sales - yesterday_sales) / yesterday_sales) * 100
+    else:
+        percentage_change = 100 if today_sales > 0 else 0
+
+    return Response({
+        "today_total": float(today_sales),
+        "yesterday_total": float(yesterday_sales),
+        "percentage_change": round(float(percentage_change), 2),
+        "is_up": today_sales >= yesterday_sales
+    })
+
+# end of shopkeeper dashboard api
+
+# api for recent sales
+@api_view(["GET"])
+def recent_sales(request, shop_id):
+    sales = ProductSale.objects.filter(
+        shop_id=shop_id
+    ).select_related("product").order_by("-sold_at")[:10]
+
+    data = []
+
+    for sale in sales:
+        data.append({
+            "id": sale.id,
+            "product_name": sale.product.product_name,
+            "quantity": sale.quantity,
+            "amount": float(sale.price * sale.quantity),
+            "time": timesince(sale.sold_at) + " ago"
+        })
+
+    return Response({"sales": data})
+# end of recent sales api

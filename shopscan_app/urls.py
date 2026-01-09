@@ -14,4 +14,6 @@ urlpatterns = [
     path('update_shopkeeper_profile/', views.update_shopkeeper_profile, name='update_shopkeeper_profile'),
     path('create_bulk_sale/', views.create_bulk_sale, name='create_bulk_sale'),
     path('delete_product/<int:shopkeeper_id>/<int:product_id>/', views.delete_product, name='delete_product'),
+    path('shopkeeper_dashboard/<int:shopkeeper_id>/', views.shopkeeper_dashboard, name='shopkeeper_dashboard'),
+    path('recent_sales/<int:shop_id>/', views.recent_sales, name='recent_sales'),
 ]
