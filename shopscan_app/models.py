@@ -9,6 +9,7 @@ class Plan(models.Model):
     ]
     PLAN_NAMES = [
         ("basic", "Basic"),
+        ("standard", "Standard"),
         ("premium", "Premium")
     ]
 
@@ -97,9 +98,12 @@ class Payment(models.Model):
         ("pending", "Pending"),
     ]
     shopkeeper = models.ForeignKey(ShopKeeper, on_delete=models.CASCADE)
+    plan = models.ForeignKey(Plan, on_delete=models.CASCADE, default=1)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     payment_method = models.CharField(max_length=20, choices=PAYMENT_METHODS)
     payment_status = models.CharField(max_length=10, choices=STATUS)
+    checkout_request_id = models.CharField(max_length=100, default="N/A")
+    receipt_number = models.CharField(max_length=100, default="N/A")
     paid_at = models.DateTimeField(default=timezone.now)
 
 

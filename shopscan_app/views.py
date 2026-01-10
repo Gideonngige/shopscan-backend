@@ -1,10 +1,10 @@
 from django.shortcuts import render
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 
 from rest_framework.decorators import api_view, parser_classes, permission_classes
 from django.views.decorators.csrf import csrf_exempt
 
-from .models import ShopKeeper, Shop, Notification, Product, ProductSale
+from .models import ShopKeeper, Shop, Notification, Product, ProductSale, Plan, ShopSubscription, Payment
 from rest_framework.parsers import MultiPartParser, FormParser
 
 from django.utils import timezone
@@ -14,6 +14,13 @@ from datetime import timedelta
 from django.db.models import F, Sum, Count, DecimalField, ExpressionWrapper
 from django.utils.timesince import timesince
 
+from .utils import get_active_subscription, get_access_token, normalize_phone
+import requests
+
+import base64
+import datetime
+
+
 import pyrebase
 import firebase_admin
 from firebase_admin import credentials, auth
@@ -21,7 +28,7 @@ import os, json
 from django.http import JsonResponse
 from rest_framework.response import Response
 from rest_framework import status
-from .serializers import NotificationSerializer
+from .serializers import NotificationSerializer, PlanSerializer, ShopSubscriptionSerializer
 
 
 firebaseConfig = {
@@ -40,9 +47,9 @@ authe = firebase.auth()
 database = firebase.database()
 
 # Initialize Firebase once (e.g., in settings.py or a startup file)
-# service_account_info = json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT"])
-cred = credentials.Certificate("serviceAccountKey.json")
-# cred = credentials.Certificate(service_account_info)
+service_account_info = json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT"])
+# cred = credentials.Certificate("serviceAccountKey.json")
+cred = credentials.Certificate(service_account_info)
 # firebase_admin.initialize_app(cred)
 if not firebase_admin._apps:
     firebase_admin.initialize_app(cred)
@@ -165,6 +172,14 @@ def signup(request):
         )
         # log user action
         # logger.info(f"User sign up: Email: {email}, Name: {full_name}")
+
+        # set default plan subscribed as basic
+        plan = Plan.objects.get(plan_name="basic")
+        ShopSubscription.objects.create(
+            shop=shop,
+            plan=plan,
+            end_date=timezone.now() + timedelta(days=plan.duration_days)
+        )
 
         # create welcome notification
         db_user = ShopKeeper.objects.get(firebase_uid=uid)
@@ -404,7 +419,7 @@ def create_bulk_sale(request):
                     return JsonResponse({"message": "Missing product details in one of the items"}, status=400)
 
                 # product check
-                product = Product.objects.filter(barcode_number=barcode_number).first()
+                product = Product.objects.filter(shop=shop, barcode_number=barcode_number).first()
                 if not product:
                     return JsonResponse({"message": f"Product with barcode {barcode_number} not found"}, status=404)
 
@@ -587,3 +602,165 @@ def stock_status(request, shop_id):
         "products": data
     })
 # end of stock status api
+
+# api to get plans
+@api_view(["GET"])
+def get_plans(request):
+    plans = Plan.objects.filter(is_active=True)
+    serializer = PlanSerializer(plans, many=True)
+    return Response(serializer.data)
+
+# end of get plans api
+
+# api to get my subscription
+@api_view(["GET"])
+def my_subscription(request, shop_id):
+    shop = Shop.objects.get(id=shop_id)
+    # check shop
+    if shop is None:
+        return Response({"message": "Shop not found"}, status=404)
+
+    sub = get_active_subscription(shop)
+
+    if not sub:
+        return Response({"has_subscription": False})
+
+    serializer = ShopSubscriptionSerializer(sub)
+    return Response({
+        "has_subscription": True,
+        "subscription": serializer.data
+    })
+
+# end of my subscription api
+
+# start of daraja payment api
+STK_PUSH_URL = "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest"
+DARAJA_SHORTCODE = '174379'
+DARAJA_PASSKEY = os.environ.get("DARAJA_PASSKEY")
+CALLBACK_URL = 'https://shopscan-backend.onrender.com/mpesa_callback/'
+
+def lipa_na_mpesa(phone_number, amount):
+    # convert amount to int
+    amount = int(amount)
+    access_token = get_access_token()
+    if not access_token:
+        return {"error": "Could not get access token"}
+
+    timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+    password = base64.b64encode(f"{DARAJA_SHORTCODE}{DARAJA_PASSKEY}{timestamp}".encode()).decode()
+
+    headers = {"Authorization": f"Bearer {access_token}"}
+    payload = {
+        "BusinessShortCode": DARAJA_SHORTCODE,
+        "Password": password,
+        "Timestamp": timestamp,
+        "TransactionType": "CustomerPayBillOnline",
+        "Amount": amount,
+        "PartyA": phone_number,
+        "PartyB": DARAJA_SHORTCODE,
+        "PhoneNumber": phone_number,
+        "CallBackURL": CALLBACK_URL,
+        "AccountReference": "ShopScan",
+        "TransactionDesc": "Payment for subscription"
+    }
+    print("SHORTCODE:", DARAJA_SHORTCODE)
+    print("PASSKEY:", DARAJA_PASSKEY)
+    print("TOKEN:", access_token)
+    print("URL:", STK_PUSH_URL)
+
+
+    response = requests.post(STK_PUSH_URL, json=payload, headers=headers)
+    return response.json()
+    # return JsonResponse(response.json())
+
+
+# callback endpoint to handle mpesa responses
+@csrf_exempt
+def mpesa_callback(request):
+    if request.method == "POST":
+        data = json.loads(request.body)
+        stk = data.get("Body", {}).get("stkCallback", {})
+        result_code = stk.get("ResultCode")
+        checkout_request_id = stk.get("CheckoutRequestID")
+        try:
+            payment = Payment.objects.get(checkout_request_id=checkout_request_id)
+            if result_code == 0:
+                metadata = stk.get("CallbackMetadata", {}).get("Item", [])
+                meta = {i["Name"]: i.get("Value") for i in metadata}
+                payment.status = "paid"
+                payment.receipt_number = meta.get("MpesaReceiptNumber")
+                payment.paid_at = timezone.now()
+                payment.save()
+
+                # deactivate old subscriptions
+                shop = payment.shopkeeper.shop
+                ShopSubscription.objects.filter(shop=shop, is_active=True).update(is_active=False)
+        
+                # create new subscription
+                plan = Plan.objects.get(id=payment.plan.id)
+                sub = ShopSubscription.objects.create(
+                    shop=shop,
+                    plan=plan,
+                    start_date=timezone.now(),
+                    end_date=timezone.now() + timedelta(days=plan.duration_days),
+                    is_active=True
+                )
+
+
+            else:
+                payment.status = "failed"
+                payment.save()
+
+        except Payment.DoesNotExist:
+            print("Payment with CheckoutRequestID not found:", checkout_request_id)
+
+        print(data)
+        return JsonResponse({"ResultCode": 0, "ResultDesc": "Accepted"})
+    return JsonResponse({"error": "Invalid request"})
+
+
+# api for  subscribing to plans
+@api_view(["POST"])
+def subscribe_plan(request):
+    plan_id = request.data.get("plan_id")
+    shopkeeper = request.data.get("shopkeeper_id")
+    phone_number = request.data.get("phone_number")
+
+    print(f"Phone number: {phone_number}")
+
+    plan = Plan.objects.get(id=plan_id)
+    if not plan:
+        return Response({"message": "Plan not found"}, status=404)
+
+    shopkeeper = ShopKeeper.objects.get(id=shopkeeper)
+    if not shopkeeper:
+        return Response({"message": "Shopkeeper not found"}, status=404)
+
+    mpesa_response = lipa_na_mpesa(phone_number, plan.price)
+    print("MPESA RESPONSE:", mpesa_response)
+
+    if mpesa_response.get("ResponseCode") == "0":
+
+        # create payment
+        Payment.objects.create(
+            shopkeeper=shopkeeper,
+            plan=plan,
+            amount=plan.price,
+            payment_method="mpesa",
+            payment_status="pending",
+            paid_at=timezone.now(),
+            checkout_request_id=mpesa_response.get("CheckoutRequestID")
+        )
+
+        return Response({
+            "message": "Stk Push sent to phone number",
+            "mpesa_response": mpesa_response
+        })
+    
+    else:
+        return Response({
+            "message": "Failed to send Stk push.",
+            "mpesa_response": mpesa_response
+        })
+
+# end of subscribe plan api

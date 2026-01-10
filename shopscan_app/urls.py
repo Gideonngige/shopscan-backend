@@ -19,4 +19,8 @@ urlpatterns = [
     path('dashboard_summary/<int:shop_id>/', views.dashboard_summary, name='dashboard_summary'),
     path('weekly_sales/<int:shop_id>/', views.weekly_sales, name='weekly_sales'),
     path('stock_status/<int:shop_id>/', views.stock_status, name='stock_status'),
+    path('get_plans/', views.get_plans, name='get_plans'),
+    path('my_subscription/<int:shop_id>/', views.my_subscription, name='my_subscription'),
+    path('subscribe_plan/', views.subscribe_plan, name='subscribe_plan'),
+    path('mpesa_callback/', views.mpesa_callback, name='mpesa_callback'),
 ]
