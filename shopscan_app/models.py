@@ -16,6 +16,9 @@ class Plan(models.Model):
     plan_type = models.CharField(max_length=10, choices=PLAN_CHOICES)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     duration_days = models.PositiveIntegerField()
+    max_products = models.PositiveIntegerField(default=0)  # 0 = unlimited
+    can_scan = models.BooleanField(default=True)
+    can_view_reports = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
