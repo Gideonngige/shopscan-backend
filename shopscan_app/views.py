@@ -705,6 +705,11 @@ def mpesa_callback(request):
                     end_date=timezone.now() + timedelta(days=plan.duration_days),
                     is_active=True
                 )
+                # send notification
+                Notification.objects.create(
+                    shopkeeper=payment.shopkeeper,
+                    message=f"Your subscription to {plan.plan_name} plan has been activated."
+                )
 
 
             else:
@@ -735,6 +740,8 @@ def subscribe_plan(request):
     shopkeeper = ShopKeeper.objects.get(id=shopkeeper)
     if not shopkeeper:
         return Response({"message": "Shopkeeper not found"}, status=404)
+    
+    phone_number = normalize_phone(phone_number)
 
     mpesa_response = lipa_na_mpesa(phone_number, plan.price)
     print("MPESA RESPONSE:", mpesa_response)

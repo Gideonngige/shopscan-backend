@@ -32,13 +32,16 @@ def get_access_token():
 def normalize_phone(phone):
     phone = phone.strip().replace(" ", "").replace("+", "")
 
-    if phone.startswith("2547"):
-        return "0" + phone[3:]   # 254712345678 -> 0712345678
+    # If already in 254 format
+    if phone.startswith("2547") and len(phone) == 12:
+        return phone
 
-    if phone.startswith("7"):
-        return "0" + phone      # 712345678 -> 0712345678
+    # If starts with 07...
+    if phone.startswith("07") and len(phone) == 10:
+        return "254" + phone[1:]
 
-    if phone.startswith("07"):
-        return phone           # already correct
+    # If starts with 7...
+    if phone.startswith("7") and len(phone) == 9:
+        return "254" + phone
 
     raise ValueError("Invalid phone number format")
