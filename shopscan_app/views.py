@@ -73,6 +73,32 @@ def verify_firebase_token(view_func):
 
     return wrapper
 
+# api to refresh token
+@api_view(["POST"])
+def refresh_token(request):
+    refresh_token = request.data.get("refresh_token")
+
+    if not refresh_token:
+        return JsonResponse({"message": "Refresh token is required"}, status=400)
+
+    try:
+        # Pyrebase refresh
+        new_tokens = authe.refresh(refresh_token)
+
+        return JsonResponse({
+            "access_token": new_tokens["idToken"],
+            "refresh_token": new_tokens["refreshToken"],
+            "expires_in": new_tokens["expiresIn"],
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            "message": "Failed to refresh token",
+            "error": str(e)
+        }, status=401)
+
+
+# index page api
 def index(request):
     return HttpResponse("ShopScan Index Page!")
 
@@ -87,6 +113,8 @@ def signin(request):
         # Try Firebase sign in
         login = authe.sign_in_with_email_and_password(email, password)
         id_token = login["idToken"]
+        refresh_token = login["refreshToken"]
+        expires_in = login["expiresIn"]
 
         # Get account info
         info = authe.get_account_info(id_token)
@@ -109,6 +137,8 @@ def signin(request):
         return JsonResponse({
             "message": "Login successful",
             "access_token": id_token,
+            "refresh_token": refresh_token,
+            "expires_in": expires_in,
             "shopkeeper": {
                 "shopkeeper_id": db_user.id,
                 "shopkeeper_name": db_user.shopkeeper_name,
@@ -117,13 +147,13 @@ def signin(request):
                 "shop_id": db_user.shop.id,
                 "phone_number": db_user.phone_number,
                 "phone_verified": db_user.phone_verified,
-                "profile_image": db_user.profile_image,
+                "profile_image": db_user.profile_image.url,
                 "date_joined": db_user.date_joined.strftime("%Y-%m-%d %H:%M:%S"),
             }
         })
 
     except Exception as e:
-        return JsonResponse({"message": "Invalid login", "error": str(e)}, status=401)
+        return JsonResponse({"message": "An error occurred!.", "error": str(e)}, status=401)
 # end
 
 
@@ -231,6 +261,7 @@ def request_password_reset(request):
 
 # start of get notifications api
 @api_view(['GET'])
+@verify_firebase_token
 def get_notifications(request, shopkeeper_id):
     try:
         shopkeeper = ShopKeeper.objects.get(id=shopkeeper_id)
@@ -339,7 +370,7 @@ def add_stock(request):
 @csrf_exempt
 @api_view(['POST'])
 @parser_classes([MultiPartParser, FormParser])
-# @verify_firebase_token
+@verify_firebase_token
 def update_shopkeeper_profile(request):
     try:
         shopkeeper_id = request.data.get('shopkeeper_id')
@@ -387,6 +418,7 @@ def update_shopkeeper_profile(request):
 # create bulky sale api
 @csrf_exempt
 @api_view(['POST'])
+@verify_firebase_token
 def create_bulk_sale(request):
     if request.method == 'POST':
         try:
@@ -448,6 +480,7 @@ def create_bulk_sale(request):
 
 # delete product api
 @api_view(['DELETE'])
+@verify_firebase_token
 def delete_product(request, shopkeeper_id, product_id):
     try:
         # check shopkeeper exists
@@ -472,6 +505,7 @@ def delete_product(request, shopkeeper_id, product_id):
 
 # api for shopkeeper dashboard
 @api_view(["GET"])
+@verify_firebase_token
 def shopkeeper_dashboard(request, shopkeeper_id):
     today = timezone.now().date()
     yesterday = today - timedelta(days=1)
@@ -536,6 +570,7 @@ def recent_sales(request, shop_id):
 
 # dashboard summary api
 @api_view(["GET"])
+@verify_firebase_token
 def dashboard_summary(request, shop_id):
     # Total products
     total_products = Product.objects.filter(shop_id=shop_id).count()
@@ -555,6 +590,7 @@ def dashboard_summary(request, shop_id):
 
 # api for weekly sales data
 @api_view(["GET"])
+@verify_firebase_token
 def weekly_sales(request, shop_id):
     today = timezone.now().date()
     start_date = today - timedelta(days=6)
@@ -586,6 +622,7 @@ def weekly_sales(request, shop_id):
 
 # api for stock status
 @api_view(["GET"])
+@verify_firebase_token
 def stock_status(request, shop_id):
     products = Product.objects.filter(shop_id=shop_id)
 
@@ -605,6 +642,7 @@ def stock_status(request, shop_id):
 
 # api to get plans
 @api_view(["GET"])
+@verify_firebase_token
 def get_plans(request):
     plans = Plan.objects.filter(is_active=True)
     serializer = PlanSerializer(plans, many=True)
@@ -614,6 +652,7 @@ def get_plans(request):
 
 # api to get my subscription
 @api_view(["GET"])
+@verify_firebase_token
 def my_subscription(request, shop_id):
     shop = Shop.objects.get(id=shop_id)
     # check shop
@@ -726,6 +765,7 @@ def mpesa_callback(request):
 
 # api for  subscribing to plans
 @api_view(["POST"])
+@verify_firebase_token
 def subscribe_plan(request):
     plan_id = request.data.get("plan_id")
     shopkeeper = request.data.get("shopkeeper_id")
