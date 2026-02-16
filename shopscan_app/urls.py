@@ -24,4 +24,5 @@ urlpatterns = [
     path('my_subscription/<int:shop_id>/', views.my_subscription, name='my_subscription'),
     path('subscribe_plan/', views.subscribe_plan, name='subscribe_plan'),
     path('mpesa_callback/', views.mpesa_callback, name='mpesa_callback'),
+    path('send_expo_token/<int:shopkeeper_id>/<str:expo_token>/', views.send_expo_token, name='send_expo_token'),
 ]

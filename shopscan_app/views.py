@@ -414,6 +414,27 @@ def update_shopkeeper_profile(request):
 
 # end of update shopkeeper profile api
 
+# send push notification to phne
+EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
+
+def send_push_notification(token, title, body, data=None):
+    if not token:
+        return {"error": "No push token provided."}
+
+    message = {
+        "to": f"{token}",
+        "sound": "default",
+        "title": f"{title}",
+        "body": f"{body}",
+        "data": data or {},
+    }
+
+    try:
+        response = requests.post(EXPO_PUSH_URL, json=message)
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        return {"error": str(e)}
+
 
 # create bulky sale api
 @csrf_exempt
@@ -469,6 +490,13 @@ def create_bulk_sale(request):
                 product.quantity -= 1
                 product.save()
                 sale_ids.append(sale.id)
+
+                if product.quantity < 2:
+                    send_push_notification(
+                        shopkeeper.expo_token,
+                        "Low Stock Alert",
+                        f"{product.product_name} is running low on stock!"
+                    )
 
             return JsonResponse({"message": "All sales created successfully", "sale_ids": sale_ids}, status=200)
 
@@ -811,3 +839,18 @@ def subscribe_plan(request):
         })
 
 # end of subscribe plan api
+
+# send expo_token
+@api_view(['GET'])
+@verify_firebase_token
+def send_expo_token(request, shopkeeper_id, expo_token):
+    try:
+        shopkeeper = ShopKeeper.objects.get(id=shopkeeper_id)
+        shopkeeper.expo_token = expo_token
+        shopkeeper.save()
+        return JsonResponse({"message":"Token saved successfully"})
+
+    except ShopKeeper.DoesNotExist:
+        return JsonResponse({"message": "ShopKeeper not found"}, status=404)
+    except Exception as e:
+        return JsonResponse({"message": str(e)}, status=500)
