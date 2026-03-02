@@ -20,6 +20,7 @@ class Plan(models.Model):
     max_products = models.PositiveIntegerField(default=0)  # 0 = unlimited
     can_scan = models.BooleanField(default=True)
     can_view_reports = models.BooleanField(default=False)
+    can_generate_barcode = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -116,3 +117,13 @@ class Notification(models.Model):
 
     def __str__(self):
         return f"Notification for {self.shopkeeper.shopkeeper_name}"
+
+# store generated barcodes
+class Barcode(models.Model):
+    shop = models.ForeignKey(Shop, on_delete=models.CASCADE)
+    barcode_number = models.CharField(max_length=45)
+    product_name = models.CharField(max_length=100)
+    generated_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"#{self.id} - {self.shop.shop_name} - {self.product_name}"

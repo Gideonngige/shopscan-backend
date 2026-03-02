@@ -15,7 +15,8 @@ class PlanSerializer(serializers.ModelSerializer):
 
 # shop subscription serializer
 class ShopSubscriptionSerializer(serializers.ModelSerializer):
-    plan = PlanSerializer()
+    plan = PlanSerializer(read_only=True)
+    plan_name = serializers.CharField(source="plan.plan_name", read_only=True)
 
     class Meta:
         model = ShopSubscription

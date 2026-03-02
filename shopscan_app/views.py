@@ -4,7 +4,7 @@ from django.http import HttpResponse, JsonResponse
 from rest_framework.decorators import api_view, parser_classes, permission_classes
 from django.views.decorators.csrf import csrf_exempt
 
-from .models import ShopKeeper, Shop, Notification, Product, ProductSale, Plan, ShopSubscription, Payment
+from .models import ShopKeeper, Shop, Notification, Product, ProductSale, Plan, ShopSubscription, Payment, Barcode
 from rest_framework.parsers import MultiPartParser, FormParser
 
 from django.utils import timezone
@@ -19,6 +19,7 @@ import requests
 
 import base64
 import datetime
+import random
 
 
 import pyrebase
@@ -464,6 +465,8 @@ def create_bulk_sale(request):
             sale_ids = []
             for item in products:
                 barcode_number = item.get("barcode_number")
+                print("Barcode:", barcode_number)
+                print("Type of barcode:", type(barcode_number))
                 # quantity = item.get("quantity")
                 # price = item.get("price")
 
@@ -473,6 +476,7 @@ def create_bulk_sale(request):
 
                 # product check
                 product = Product.objects.filter(shop=shop, barcode_number=barcode_number).first()
+                # print("Product:", product.barcode_number);
                 if not product:
                     return JsonResponse({"message": f"Product with barcode {barcode_number} not found"}, status=404)
 
@@ -680,7 +684,7 @@ def get_plans(request):
 
 # api to get my subscription
 @api_view(["GET"])
-@verify_firebase_token
+# @verify_firebase_token
 def my_subscription(request, shop_id):
     shop = Shop.objects.get(id=shop_id)
     # check shop
@@ -854,3 +858,60 @@ def send_expo_token(request, shopkeeper_id, expo_token):
         return JsonResponse({"message": "ShopKeeper not found"}, status=404)
     except Exception as e:
         return JsonResponse({"message": str(e)}, status=500)
+
+
+# helper function to generate unique barcode
+
+def calculate_ean13_check_digit(code12):
+    digits = [int(d) for d in code12]
+    
+    odd_sum = sum(digits[::2])
+    even_sum = sum(digits[1::2])
+    
+    total = odd_sum + (even_sum * 3)
+    check_digit = (10 - (total % 10)) % 10
+    
+    return str(check_digit)
+
+
+def generate_unique_barcode():
+    while True:
+        code12 = str(random.randint(100000000000, 999999999999))  # 12 digits
+        check_digit = calculate_ean13_check_digit(code12)
+        full_code = code12 + check_digit
+        
+        if not Product.objects.filter(barcode_number=full_code).exists():
+            return full_code
+
+@api_view(["GET"])
+def generate_barcode(request, shop_id, product_name):
+    barcode = generate_unique_barcode()
+    
+    shop = Shop.objects.filter(id=shop_id).first()
+    if not shop:
+        return JsonResponse({"message": "Shop not found"}, status=404)
+    # store the barcode in database
+    Barcode.objects.create(
+        shop=shop,
+        barcode_number=barcode,
+        product_name=product_name
+    )
+
+    return Response({
+        "barcode": barcode
+    })
+
+# api to get all barcodes
+@api_view(["GET"])
+def get_all_barcodes(request, shop_id):
+    barcodes = Barcode.objects.filter(shop_id=shop_id).order_by("-generated_at")
+    data = []
+    for barcode in barcodes:
+        data.append({
+            "id": barcode.id,
+            "barcode_number": barcode.barcode_number,
+            "product_name": barcode.product_name,
+            "generated_at": barcode.generated_at.strftime("%Y-%m-%d %H:%M:%S")
+        })
+    return Response({"barcodes": data})
+
