@@ -50,9 +50,9 @@ authe = firebase.auth()
 database = firebase.database()
 
 # Initialize Firebase once (e.g., in settings.py or a startup file)
-# service_account_info = json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT"])
-cred = credentials.Certificate("serviceAccountKey.json")
-# cred = credentials.Certificate(service_account_info)
+service_account_info = json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT"])
+# cred = credentials.Certificate("serviceAccountKey.json")
+cred = credentials.Certificate(service_account_info)
 # firebase_admin.initialize_app(cred)
 if not firebase_admin._apps:
     firebase_admin.initialize_app(cred)
