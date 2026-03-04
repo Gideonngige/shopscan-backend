@@ -148,7 +148,7 @@ def signin(request):
                 "shop_id": db_user.shop.id,
                 "phone_number": db_user.phone_number,
                 "phone_verified": db_user.phone_verified,
-                "profile_image": db_user.profile_image.url,
+                "profile_image": db_user.profile_image,
                 "date_joined": db_user.date_joined.strftime("%Y-%m-%d %H:%M:%S"),
             }
         })
@@ -390,13 +390,18 @@ def update_shopkeeper_profile(request):
         if shop_name:
             shopkeeper.shop.shop_name = shop_name
             shopkeeper.shop.save()
+
+        profile_url = None
         if profile_image:
-            shopkeeper.profile_image = profile_image 
+            upload_result = cloudinary.uploader.upload(profile_image)
+            profile_url = upload_result.get("secure_url")
+            shopkeeper.profile_image = profile_url
+        
 
         shopkeeper.save()
         return JsonResponse({
             "message": "Profile updated successfully",
-            "profile_image": shopkeeper.profile_image.url if shopkeeper.profile_image else None,
+            "profile_image": shopkeeper.profile_image if shopkeeper.profile_image else None,
             "name": shopkeeper.full_name,
             "phone": shopkeeper.phone_number,
             "email": shopkeeper.email,

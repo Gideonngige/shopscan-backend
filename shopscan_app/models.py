@@ -56,7 +56,7 @@ class ShopKeeper(models.Model):
     firebase_uid = models.CharField(max_length=256)
     phone_verified = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
-    profile_image = models.ImageField(upload_to='profiles/', null=True, blank=True, default="/media/profiles/profile_HIgBKoo.jpg")
+    profile_image = models.URLField(default="https://res.cloudinary.com/dc68huvjj/image/upload/v1748102584/kwwwa0avlfoeybpi3key.png")
     expo_token = models.CharField(max_length=100)
     date_joined = models.DateTimeField(default=timezone.now)
 
