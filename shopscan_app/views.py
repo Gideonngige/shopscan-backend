@@ -467,7 +467,7 @@ def create_bulk_sale(request):
                 barcode_number = item.get("barcode_number")
                 print("Barcode:", barcode_number)
                 print("Type of barcode:", type(barcode_number))
-                # quantity = item.get("quantity")
+                quantity = item.get("quantity")
                 # price = item.get("price")
 
                 # Check required fields
@@ -480,7 +480,7 @@ def create_bulk_sale(request):
                 if not product:
                     return JsonResponse({"message": f"Product with barcode {barcode_number} not found"}, status=404)
 
-                if product.quantity < 1:
+                if product.quantity < quantity:
                     return JsonResponse({"message": f"Not enough stock for {product.product_name}"}, status=400)
 
                 # Create sale
@@ -488,10 +488,10 @@ def create_bulk_sale(request):
                     product=product,
                     shop=shop,
                     shopkeeper=shopkeeper,
-                    quantity=1,
-                    price=product.price,
+                    quantity=quantity,
+                    price=product.price * quantity,
                 )
-                product.quantity -= 1
+                product.quantity -= quantity
                 product.save()
                 sale_ids.append(sale.id)
 
@@ -543,7 +543,7 @@ def shopkeeper_dashboard(request, shopkeeper_id):
     yesterday = today - timedelta(days=1)
 
     amount_expr = ExpressionWrapper(
-        F("price") * F("quantity"),
+        F("price"),
         output_field=DecimalField(max_digits=12, decimal_places=2)
     )
 
@@ -592,7 +592,7 @@ def recent_sales(request, shop_id):
             "id": sale.id,
             "product_name": sale.product.product_name,
             "quantity": sale.quantity,
-            "amount": float(sale.price * sale.quantity),
+            "amount": sale.price,
             "time": timesince(sale.sold_at) + " ago"
         })
 
