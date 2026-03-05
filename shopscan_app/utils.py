@@ -43,5 +43,10 @@ def normalize_phone(phone):
     # If starts with 7...
     if phone.startswith("7") and len(phone) == 9:
         return "254" + phone
+    if phone.startswith("2541") and len(phone) == 10:
+        return "254" + phone[2:]
+    # if number start with 1 or 01 and has 9 digits, assume it's a local number without country code
+    if (phone.startswith("1") or phone.startswith("01")) and len(phone) == 9:
+        return "254" + phone.lstrip("0")
 
     raise ValueError("Invalid phone number format")
